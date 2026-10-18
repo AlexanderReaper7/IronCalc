@@ -150,11 +150,14 @@
   },
   "context_menu": {
     "cell": {
+      "add_note": "Aggiungi nota",
       "copy": "Copia",
       "cut": "Taglia",
       "delete": "Elimina...",
       "delete_column": "Colonna '{{column}}'",
+      "delete_note": "Elimina nota",
       "delete_row": "Riga '{{row}}'",
+      "edit_note": "Modifica nota",
       "insert": "Inserisci...",
       "insert_column_left": "Colonna a sinistra",
       "insert_column_right": "Colonna a destra",
@@ -313,6 +316,12 @@
   "navigation": {
     "add_sheet": "Aggiungi foglio",
     "sheet_list": "Elenco fogli"
+  },
+  "note_card": {
+    "delete": "Elimina nota",
+    "edit": "Modifica nota",
+    "label": "Nota",
+    "placeholder": "Scrivi una nota"
   },
   "num_fmt": {
     "cancel": "Annulla",

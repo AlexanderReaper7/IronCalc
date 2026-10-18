@@ -67,6 +67,7 @@ export interface IronCalcThemeVariables {
   "--palette-sheet-grid-color": string;
   "--palette-sheet-grid-separator-color": string;
   "--palette-sheet-default-text-color": string;
+  "--palette-sheet-note-marker-color": string;
   "--palette-sheet-outline-color": string;
   "--palette-sheet-outline-editing-color": string;
   "--palette-sheet-outline-background-color": string;
