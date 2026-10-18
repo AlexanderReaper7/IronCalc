@@ -526,6 +526,13 @@ impl Model {
             .map_err(to_js_error)
     }
 
+    /// The last row and column that hold a value or a cell note, `[0, 0]` if none.
+    #[wasm_bindgen(js_name = "getSheetExtent", unchecked_return_type = "[number, number]")]
+    pub fn get_sheet_extent(&self, sheet: u32) -> Result<JsValue, JsError> {
+        let (row, column) = self.model.get_sheet_extent(sheet).map_err(to_js_error)?;
+        serde_wasm_bindgen::to_value(&[row, column]).map_err(|e| to_js_error(e.to_string()))
+    }
+
     #[wasm_bindgen(js_name = "getFrozenRowsCount")]
     pub fn get_frozen_rows_count(&self, sheet: u32) -> Result<i32, JsError> {
         self.model.get_frozen_rows_count(sheet).map_err(to_js_error)

@@ -23,6 +23,12 @@ interface IronCalcProperties {
   rootContainer?: HTMLElement | null;
   /** When false, renders without the toolbar, the formula bar is read-only and all edits are blocked. */
   canEdit?: boolean;
+  /**
+   * "content": the grid of each sheet ends a few rows and columns past its last
+   * value or note, and grows as the selection moves past the end. "unbounded",
+   * the default: the grid runs to the last row and column.
+   */
+  sheetExtent?: "content" | "unbounded";
 }
 
 export interface IronCalcHandle {
@@ -30,7 +36,16 @@ export interface IronCalcHandle {
 }
 
 const IronCalc = forwardRef<IronCalcHandle, IronCalcProperties>(
-  ({ themeVariables, model, rootContainer, canEdit = true }, ref) => {
+  (
+    {
+      themeVariables,
+      model,
+      rootContainer,
+      canEdit = true,
+      sheetExtent = "unbounded",
+    },
+    ref,
+  ) => {
     const root = rootContainer ?? document.body;
     useEffect(() => {
       if (root.classList.contains("ic-root")) {
@@ -64,6 +79,7 @@ const IronCalc = forwardRef<IronCalcHandle, IronCalcProperties>(
             model={model}
             workbookState={new WorkbookState()}
             canEdit={canEdit}
+            sheetExtent={sheetExtent}
           />
         </I18nextProvider>
       </div>

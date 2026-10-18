@@ -48,6 +48,7 @@ const Worksheet = forwardRef(
       workbookState: WorkbookState;
       refresh: () => void;
       canEdit: boolean;
+      sheetExtent: "content" | "unbounded";
       onCut: () => void;
       onCopy: () => void;
       onPaste: () => void;
@@ -169,6 +170,7 @@ const Worksheet = forwardRef(
       const canvas = new WorksheetCanvas({
         width: worksheetRef.clientWidth,
         height: worksheetRef.clientHeight,
+        sheetExtent: props.sheetExtent,
         model,
         workbookState,
         elements: {
@@ -249,7 +251,12 @@ const Worksheet = forwardRef(
       });
       const scrollX = model.getScrollX();
       const scrollY = model.getScrollY();
-      const [sheetWidth, sheetHeight] = [scrollX + 100_000, scrollY + 500_000];
+      // An unbounded sheet scrolls as far as needed; one bounded by its content
+      // scrolls to its edge
+      const [sheetWidth, sheetHeight] =
+        props.sheetExtent === "content"
+          ? canvas.getSheetDimensions()
+          : [scrollX + 100_000, scrollY + 500_000];
       if (spacerElement.current) {
         spacerElement.current.style.height = `${sheetHeight}px`;
         spacerElement.current.style.width = `${sheetWidth}px`;

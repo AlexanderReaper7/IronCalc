@@ -1970,6 +1970,31 @@ impl<'a> UserModel<'a> {
         Ok(())
     }
 
+    /// Returns the last row and the last column that hold a value or a cell note,
+    /// as `(row, column)`, or `(0, 0)` if the sheet has none. Cells that have only
+    /// a style don't count. Each call goes through every cell of the sheet.
+    pub fn get_sheet_extent(&self, sheet: u32) -> Result<(i32, i32), String> {
+        let worksheet = self.model.workbook.worksheet(sheet)?;
+        let mut last_row = 0;
+        let mut last_column = 0;
+        for (row, column, cell) in worksheet.sheet_data.cells() {
+            if matches!(cell.as_ref(), Cell::EmptyCell { .. }) {
+                continue;
+            }
+            last_row = last_row.max(row);
+            last_column = last_column.max(column);
+        }
+        for comment in &worksheet.comments {
+            if let Some(reference) =
+                crate::expressions::utils::parse_reference_a1(&comment.cell_ref)
+            {
+                last_row = last_row.max(reference.row);
+                last_column = last_column.max(reference.column);
+            }
+        }
+        Ok((last_row, last_column))
+    }
+
     /// Returns true in the grid lines for
     pub fn get_show_grid_lines(&self, sheet: u32) -> Result<bool, String> {
         Ok(self.model.workbook.worksheet(sheet)?.show_grid_lines)

@@ -14,6 +14,8 @@ import {
 } from "./cfRenderer";
 import {
   cellPadding,
+  EXTENT_COLUMN_MARGIN,
+  EXTENT_ROW_MARGIN,
   headerColumnWidth,
   headerRowHeight,
   LAST_COLUMN,
@@ -51,6 +53,9 @@ export interface CanvasSettings {
   // double-click) is rejected
   onAutofillError?: (message: string) => void;
   linkTooltipCell: LinkHoverCell | null;
+  // "content": the grid ends a margin past the sheet's last value or note.
+  // "unbounded" (the default): it runs to the last row and column.
+  sheetExtent?: "content" | "unbounded";
   refresh: () => void;
 }
 
@@ -142,6 +147,14 @@ export default class WorksheetCanvas {
 
   private cellLinks: CellLinks;
 
+  private sheetExtent: "content" | "unbounded";
+
+  // The last row and column of the grid: LAST_ROW and LAST_COLUMN, or with
+  // sheetExtent "content" a margin past the content (see computeExtent)
+  lastRow: number;
+
+  lastColumn: number;
+
   theme: Theme;
 
   constructor(options: CanvasSettings) {
@@ -187,11 +200,41 @@ export default class WorksheetCanvas {
     this.paneIndex = 0;
     this.paneClip = [0, 0, 0, 0];
 
+    this.sheetExtent = options.sheetExtent ?? "unbounded";
+    this.lastRow = LAST_ROW;
+    this.lastColumn = LAST_COLUMN;
+    this.computeExtent();
+
     this.cellLinks = new CellLinks(this, {
       onLinkHover: options.onLinkHover,
       onHideTooltip: options.onHideLinkTooltip,
       tooltipCell: options.linkTooltipCell,
     });
+  }
+
+  // With sheetExtent "content", the grid ends a margin past the last value or
+  // note, or past the selection when that reaches further, so moving the
+  // selection past the end grows the sheet. Recomputed on every render.
+  private computeExtent(): void {
+    if (this.sheetExtent !== "content") {
+      return;
+    }
+    const view = this.model.getSelectedView();
+    const [contentRow, contentColumn] = this.model.getSheetExtent(view.sheet);
+    const row = Math.max(
+      contentRow,
+      view.row,
+      Math.min(view.range[0], view.range[2]),
+      this.model.getFrozenRowsCount(view.sheet),
+    );
+    const column = Math.max(
+      contentColumn,
+      view.column,
+      Math.min(view.range[1], view.range[3]),
+      this.model.getFrozenColumnsCount(view.sheet),
+    );
+    this.lastRow = Math.min(LAST_ROW, row + EXTENT_ROW_MARGIN);
+    this.lastColumn = Math.min(LAST_COLUMN, column + EXTENT_COLUMN_MARGIN);
   }
 
   // Follows a cell link: opens external targets in a new tab, navigates to
@@ -342,9 +385,9 @@ export default class WorksheetCanvas {
     const frozenColumnsWidth = this.getFrozenColumnsWidth();
     const frozenRowsHeight = this.getFrozenRowsHeight();
     let y = headerRowHeight + frozenRowsHeight;
-    for (let row = rowTop; row <= LAST_ROW; row += 1) {
+    for (let row = rowTop; row <= this.lastRow; row += 1) {
       const rowHeight = this.getRowHeight(selectedSheet, row);
-      if (y >= this.height - rowHeight || row === LAST_ROW) {
+      if (y >= this.height - rowHeight || row === this.lastRow) {
         rowBottom = row;
         break;
       }
@@ -352,9 +395,9 @@ export default class WorksheetCanvas {
     }
 
     let x = headerColumnWidth + frozenColumnsWidth;
-    for (let column = columnLeft; column <= LAST_COLUMN; column += 1) {
+    for (let column = columnLeft; column <= this.lastColumn; column += 1) {
       const columnWidth = this.getColumnWidth(selectedSheet, column);
-      if (x >= this.width - columnWidth || column === LAST_COLUMN) {
+      if (x >= this.width - columnWidth || column === this.lastColumn) {
         columnRight = column;
         break;
       }
@@ -377,7 +420,7 @@ export default class WorksheetCanvas {
     const selectedSheet = this.model.getSelectedSheet();
     let top = 0;
     let row = 1 + this.model.getFrozenRowsCount(selectedSheet);
-    while (row <= LAST_ROW && top <= maxTop) {
+    while (row <= this.lastRow && top <= maxTop) {
       const height = this.getRowHeight(selectedSheet, row);
       if (top + height <= maxTop) {
         top += height;
@@ -393,7 +436,7 @@ export default class WorksheetCanvas {
     let left = 0;
     const selectedSheet = this.model.getSelectedSheet();
     let column = 1 + this.model.getFrozenColumnsCount(selectedSheet);
-    while (left <= maxLeft && column <= LAST_COLUMN) {
+    while (left <= maxLeft && column <= this.lastColumn) {
       const width = this.getColumnWidth(selectedSheet, column);
       if (width + left <= maxLeft) {
         left += width;
@@ -1649,12 +1692,18 @@ export default class WorksheetCanvas {
 
   getSheetDimensions(): [number, number] {
     let x = headerColumnWidth;
-    for (let column = 1; column < LAST_COLUMN + 1; column += 1) {
+    for (let column = 1; column < this.lastColumn + 1; column += 1) {
       x += this.getColumnWidth(this.model.getSelectedSheet(), column);
     }
     let y = headerRowHeight;
-    for (let row = 1; row < LAST_ROW + 1; row += 1) {
+    for (let row = 1; row < this.lastRow + 1; row += 1) {
       y += this.getRowHeight(this.model.getSelectedSheet(), row);
+    }
+    if (this.sheetExtent === "content") {
+      // The grid ends at its last row and column
+      this.sheetWidth = Math.ceil(x);
+      this.sheetHeight = Math.ceil(y);
+      return [this.sheetWidth, this.sheetHeight];
     }
     this.sheetWidth = Math.floor(
       x + this.getColumnWidth(this.model.getSelectedSheet(), LAST_COLUMN),
@@ -1850,7 +1899,7 @@ export default class WorksheetCanvas {
       column = topLeftCell.column - 1;
       while (cellX <= x) {
         column += 1;
-        if (column > LAST_COLUMN) {
+        if (column > this.lastColumn) {
           return null;
         }
         cellX += this.getColumnWidth(this.model.getSelectedSheet(), column);
@@ -1883,7 +1932,11 @@ export default class WorksheetCanvas {
       row = topLeftCell.row - 1;
       while (cellY <= y) {
         row += 1;
-        if (row > LAST_ROW) {
+        if (row > this.lastRow) {
+          if (this.sheetExtent === "content") {
+            // below the last row of the grid
+            return null;
+          }
           row = LAST_ROW;
           break;
         }
@@ -2318,13 +2371,19 @@ export default class WorksheetCanvas {
     ctx.setLineDash([]);
   }
 
-  private drawHeaderSeparators(x: number, y: number): void {
+  // `right` and `bottom` end the lines where a bounded grid ends
+  private drawHeaderSeparators(
+    x: number,
+    y: number,
+    right = this.width,
+    bottom = this.height,
+  ): void {
     const context = this.ctx;
     context.save();
     context.strokeStyle = this.theme.headerBorderColor;
     context.lineWidth = 1;
-    drawBorderLine(context, x, y, this.width, y);
-    drawBorderLine(context, x, y, x, this.height);
+    drawBorderLine(context, x, y, right, y);
+    drawBorderLine(context, x, y, x, bottom);
     context.restore();
   }
 
@@ -2341,6 +2400,7 @@ export default class WorksheetCanvas {
     this.removeHandles();
 
     this.updateMergedCells();
+    this.computeExtent();
 
     const { topLeftCell, bottomRightCell } = this.getVisibleCells();
 
@@ -2357,8 +2417,13 @@ export default class WorksheetCanvas {
     let x = headerColumnWidth + 0.5;
     let y = headerRowHeight + 0.5;
 
-    // Separators between the headers and the cells
-    this.drawHeaderSeparators(x, y);
+    // Separators between the headers and the cells. A bounded grid draws them
+    // once its edges are known, after the cells.
+    const headerSeparatorX = x;
+    const headerSeparatorY = y;
+    if (this.sheetExtent !== "content") {
+      this.drawHeaderSeparators(x, y);
+    }
 
     // Draw frozen rows and columns (top-left-pane)
     this.clipToPane(0, panes);
@@ -2469,6 +2534,31 @@ export default class WorksheetCanvas {
       y += rowHeight;
     }
     context.restore();
+
+    // Cells draw only their left and top grid lines: where the grid ends,
+    // close it on the right and at the bottom
+    if (this.sheetExtent === "content") {
+      this.drawHeaderSeparators(
+        headerSeparatorX,
+        headerSeparatorY,
+        bottomRightCell.column === this.lastColumn ? x : this.width,
+        bottomRightCell.row === this.lastRow ? y : this.height,
+      );
+      context.save();
+      context.strokeStyle = this.theme.gridColor;
+      context.lineWidth = 1;
+      context.beginPath();
+      if (bottomRightCell.row === this.lastRow) {
+        context.moveTo(headerColumnWidth, y);
+        context.lineTo(x, y);
+      }
+      if (bottomRightCell.column === this.lastColumn) {
+        context.moveTo(x, headerRowHeight);
+        context.lineTo(x, y);
+      }
+      context.stroke();
+      context.restore();
+    }
 
     // Render all cell texts
     for (const cell of this.cells) {

@@ -235,3 +235,21 @@ test.each([
     `default-colors-${mode}`,
   );
 });
+
+// With sheetExtent "content" the grid ends a few rows and columns past the last
+// value, here C3: at F13
+test("grid bounded by its content", async () => {
+  const model = await newModel();
+  labelTopLeftCell(model);
+  model.setUserInput(0, 2, 2, "Content");
+  model.setUserInput(0, 3, 3, "ends at C3");
+
+  await expectScreenshot(
+    await renderToCanvas(model, {
+      width: 800,
+      height: 420,
+      sheetExtent: "content",
+    }),
+    "sheet-extent-content",
+  );
+});
