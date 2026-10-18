@@ -151,19 +151,21 @@
   "context_menu": {
     "cell": {
       "add_note": "Add note",
+      "clear": "Clear",
+      "clear_all": "Clear all",
+      "clear_contents": "Clear contents",
       "copy": "Copy",
       "cut": "Cut",
-      "delete": "Delete...",
-      "delete_column": "Column '{{column}}'",
+      "define_named_range": "Define named range",
       "delete_note": "Delete note",
-      "delete_row": "Row '{{row}}'",
       "edit_note": "Edit note",
-      "insert": "Insert...",
-      "insert_column_left": "Column left",
-      "insert_column_right": "Column right",
-      "insert_row_above": "Row above",
-      "insert_row_below": "Row below",
-      "paste": "Paste"
+      "freeze": "Freeze",
+      "more_actions": "More cell actions",
+      "paste": "Paste",
+      "paste_format": "Format only",
+      "paste_special": "Paste special",
+      "paste_values": "Values only",
+      "unfreeze": "Unfreeze rows and columns"
     },
     "column_header": {
       "delete_column": "Delete column '{{column}}'",
