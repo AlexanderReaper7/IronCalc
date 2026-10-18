@@ -151,19 +151,21 @@
   "context_menu": {
     "cell": {
       "add_note": "Notiz hinzufügen",
+      "clear": "Löschen",
+      "clear_all": "Alles löschen",
+      "clear_contents": "Inhalte löschen",
       "copy": "Kopieren",
       "cut": "Ausschneiden",
-      "delete": "Löschen...",
-      "delete_column": "Spalte '{{column}}'",
+      "define_named_range": "Benannten Bereich festlegen",
       "delete_note": "Notiz löschen",
-      "delete_row": "Zeile '{{row}}'",
       "edit_note": "Notiz bearbeiten",
-      "insert": "Einfügen...",
-      "insert_column_left": "Spalte links",
-      "insert_column_right": "Spalte rechts",
-      "insert_row_above": "Zeile oben",
-      "insert_row_below": "Zeile unten",
-      "paste": "Einfügen"
+      "freeze": "Fixieren",
+      "more_actions": "Weitere Zellaktionen",
+      "paste": "Einfügen",
+      "paste_format": "Nur Formatierung",
+      "paste_special": "Inhalte einfügen",
+      "paste_values": "Nur Werte",
+      "unfreeze": "Fixierung aufheben"
     },
     "column_header": {
       "delete_column": "Spalte '{{column}}' löschen",

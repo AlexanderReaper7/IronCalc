@@ -62,6 +62,8 @@ const Workbook = (props: {
     editNote: () => void;
   }>(null);
   const lastClipboardJson = useRef<string | null>(null);
+  // The plain text of the last copy, for paste special without clipboard access
+  const lastClipboardText = useRef<string | null>(null);
 
   // Calling `setRedrawId((id) => id + 1);` forces a redraw
   // This is needed because `model` or `workbookState` can change without React being aware of it
@@ -340,6 +342,71 @@ const Workbook = (props: {
       }
     }
   }, [focusWorkbook, t]);
+
+  // Paste special, values only: the copied cells as plain text, as if typed,
+  // so formulas and formatting are left behind. Reads the system clipboard, or
+  // the last copy inside the workbook if the clipboard cannot be read.
+  const onPasteValues = async (): Promise<void> => {
+    focusWorkbook();
+    let text: string | null = null;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      text = lastClipboardText.current;
+    }
+    if (!text) {
+      return;
+    }
+    const {
+      sheet,
+      range: [rowStart, columnStart, rowEnd, columnEnd],
+    } = model.getSelectedView();
+    try {
+      model.pasteCsvText(
+        {
+          sheet,
+          row: Math.min(rowStart, rowEnd),
+          column: Math.min(columnStart, columnEnd),
+          width: Math.abs(columnEnd - columnStart) + 1,
+          height: Math.abs(rowEnd - rowStart) + 1,
+        },
+        text,
+      );
+    } catch (e) {
+      showPasteError(e);
+    }
+    setRedrawId((id) => id + 1);
+  };
+
+  // Paste special, format only: the styles of the last copy inside the
+  // workbook, onto the selection, like the format painter
+  const onPasteFormat = (): void => {
+    focusWorkbook();
+    const json = lastClipboardJson.current;
+    if (!json) {
+      return;
+    }
+    const source = JSON.parse(json);
+    const rows = Object.keys(source.sheetData)
+      .map(Number)
+      .sort((a, b) => a - b);
+    const styles = rows.map((row) => {
+      const cells = source.sheetData[row];
+      return Object.keys(cells)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map((column) => cells[column].style);
+    });
+    if (styles.length === 0) {
+      return;
+    }
+    try {
+      model.onPasteStyles(styles);
+    } catch (e) {
+      showPasteError(e);
+    }
+    setRedrawId((id) => id + 1);
+  };
 
   const onCopyStyles = () => {
     const {
@@ -797,6 +864,7 @@ const Workbook = (props: {
           clipboardId,
         });
         lastClipboardJson.current = clipboardJsonStr;
+        lastClipboardText.current = data.csv.trim();
         event.clipboardData.setData("text/plain", data.csv.trim());
         event.clipboardData.setData("application/json", clipboardJsonStr);
         event.preventDefault();
@@ -1045,6 +1113,13 @@ const Workbook = (props: {
             document.execCommand("copy");
           }}
           onPaste={handlePaste}
+          onPasteValues={onPasteValues}
+          onPasteFormat={onPasteFormat}
+          onMergeCells={onMergeCells}
+          onOpenNamedRanges={() => openDrawer("namedRanges")}
+          onOpenConditionalFormatting={() =>
+            openDrawer("conditionalFormatting")
+          }
           onEditLink={
             canEdit
               ? (row: number, column: number): void => {

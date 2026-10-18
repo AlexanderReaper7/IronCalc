@@ -21,7 +21,10 @@ import {
 } from "../WorksheetCanvas/constants";
 import WorksheetCanvas from "../WorksheetCanvas/worksheetCanvas";
 import type { WorkbookState } from "../workbookState";
-import CellContextMenu from "./ContextMenus/Cell";
+import CellContextMenu, {
+  type CellMenuSelection,
+  type MergeOperation,
+} from "./ContextMenus/Cell";
 import ColumnHeaderContextMenu from "./ContextMenus/ColumnHeader";
 import RowHeaderContextMenu from "./ContextMenus/RowHeader";
 import LinkTooltip from "./LinkTooltip";
@@ -56,6 +59,12 @@ const Worksheet = forwardRef(
       onPaste: () => void;
       onEditLink?: (row: number, column: number) => void;
       onDeleteLink?: (row: number, column: number) => void;
+      // Paste special: the copied values only, or the copied formatting only
+      onPasteValues: () => void;
+      onPasteFormat: () => void;
+      onMergeCells: (operation: MergeOperation) => void;
+      onOpenNamedRanges: () => void;
+      onOpenConditionalFormatting: () => void;
     },
     ref,
   ) => {
@@ -439,6 +448,37 @@ const Worksheet = forwardRef(
       };
     };
 
+    // The selection the cell menu acts on, normalized
+    const menuSelection: CellMenuSelection = (() => {
+      const { range } = model.getSelectedView();
+      const rowStart = Math.min(range[0], range[2]);
+      const rowEnd = Math.max(range[0], range[2]);
+      const columnStart = Math.min(range[1], range[3]);
+      const columnEnd = Math.max(range[1], range[3]);
+      return {
+        rowStart,
+        rowEnd,
+        columnStart,
+        columnEnd,
+        columnStartName: columnNameFromNumber(columnStart),
+        columnEndName: columnNameFromNumber(columnEnd),
+      };
+    })();
+
+    // Closes the cell menu, runs one of its actions and redraws. A failed
+    // action shows `errorTitle` when given, like the header menus do.
+    const cellMenuAction = (action: () => void, errorTitle?: string): void => {
+      setCellContextMenuOpen(false);
+      try {
+        action();
+      } catch {
+        if (errorTitle) {
+          setRowColErrorTitle(t(errorTitle));
+        }
+      }
+      refresh();
+    };
+
     // The card is placed from the current geometry on every render, so it
     // follows scrolling and resizing
     const noteCard = ((): { cell: NoteCardCell; editing: boolean } | null => {
@@ -740,87 +780,214 @@ const Worksheet = forwardRef(
               ? { x: contextMenuPosition.left, y: contextMenuPosition.top }
               : null
           }
-          column={columnNameFromNumber(model.getSelectedView().column)}
-          row={model.getSelectedView().row}
-          onCut={onCut}
-          onCopy={onCopy}
-          onPaste={onPaste}
+          selection={menuSelection}
           canEdit={canEdit}
+          hasLink={(() => {
+            const { sheet, row, column } = model.getSelectedView();
+            return !!model.getCellLink(sheet, row, column);
+          })()}
           hasNote={(() => {
             const { sheet, row, column } = model.getSelectedView();
             return !!model.getCellComment(sheet, row, column);
           })()}
+          canMerge={
+            menuSelection.rowEnd > menuSelection.rowStart ||
+            menuSelection.columnEnd > menuSelection.columnStart
+          }
+          canUnmerge={(() => {
+            const { sheet } = model.getSelectedView();
+            const s = menuSelection;
+            return model
+              .getMergedCells(sheet)
+              .some(
+                (m) =>
+                  m.row <= s.rowEnd &&
+                  m.row + m.height - 1 >= s.rowStart &&
+                  m.column <= s.columnEnd &&
+                  m.column + m.width - 1 >= s.columnStart,
+              );
+          })()}
+          frozenRows={model.getFrozenRowsCount(model.getSelectedSheet())}
+          frozenColumns={model.getFrozenColumnsCount(model.getSelectedSheet())}
+          onCut={() => cellMenuAction(onCut)}
+          onCopy={() => cellMenuAction(onCopy)}
+          onPaste={() => cellMenuAction(onPaste)}
+          onPasteValues={() => cellMenuAction(props.onPasteValues)}
+          onPasteFormat={() => cellMenuAction(props.onPasteFormat)}
+          onInsertRowsAbove={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.insertRows(
+                model.getSelectedSheet(),
+                s.rowStart,
+                s.rowEnd - s.rowStart + 1,
+              );
+            }, "error_dialog.error_inserting_rows")
+          }
+          onInsertRowsBelow={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.insertRows(
+                model.getSelectedSheet(),
+                s.rowEnd + 1,
+                s.rowEnd - s.rowStart + 1,
+              );
+            }, "error_dialog.error_inserting_rows")
+          }
+          onInsertColumnsLeft={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.insertColumns(
+                model.getSelectedSheet(),
+                s.columnStart,
+                s.columnEnd - s.columnStart + 1,
+              );
+            }, "error_dialog.error_inserting_columns")
+          }
+          onInsertColumnsRight={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.insertColumns(
+                model.getSelectedSheet(),
+                s.columnEnd + 1,
+                s.columnEnd - s.columnStart + 1,
+              );
+            }, "error_dialog.error_inserting_columns")
+          }
+          onDeleteRows={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.deleteRows(
+                model.getSelectedSheet(),
+                s.rowStart,
+                s.rowEnd - s.rowStart + 1,
+              );
+            }, "error_dialog.error_deleting_rows")
+          }
+          onDeleteColumns={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.deleteColumns(
+                model.getSelectedSheet(),
+                s.columnStart,
+                s.columnEnd - s.columnStart + 1,
+              );
+            }, "error_dialog.error_deleting_columns")
+          }
+          onClear={(operation) =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              const sheet = model.getSelectedSheet();
+              const args = [
+                sheet,
+                s.rowStart,
+                s.columnStart,
+                s.rowEnd,
+                s.columnEnd,
+              ] as const;
+              if (operation === "contents") {
+                model.rangeClearContents(...args);
+              } else if (operation === "formatting") {
+                model.rangeClearFormatting(...args);
+              } else {
+                model.rangeClearAll(...args);
+              }
+            })
+          }
+          onEditLink={() =>
+            cellMenuAction(() => {
+              const { row, column } = model.getSelectedView();
+              props.onEditLink?.(row, column);
+            })
+          }
+          onDeleteLink={() =>
+            cellMenuAction(() => {
+              const { row, column } = model.getSelectedView();
+              props.onDeleteLink?.(row, column);
+            })
+          }
           onEditNote={(): void => {
             const { sheet, row, column } = model.getSelectedView();
             setCellContextMenuOpen(false);
             setEditingNote({ sheet, row, column });
           }}
-          onDeleteNote={(): void => {
-            const { sheet, row, column } = model.getSelectedView();
-            model.deleteCellComment(sheet, row, column);
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
-          onInsertColumnLeft={(): void => {
-            const view = model.getSelectedView();
-            try {
-              model.insertColumns(view.sheet, view.column, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_inserting_columns"));
-            }
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
-          onInsertColumnRight={(): void => {
-            const view = model.getSelectedView();
-            try {
-              model.insertColumns(view.sheet, view.range[3] + 1, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_inserting_columns"));
-            }
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
-          onInsertRowAbove={(): void => {
-            const view = model.getSelectedView();
-            try {
-              model.insertRows(view.sheet, view.row, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_inserting_rows"));
-            }
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
-          onInsertRowBelow={(): void => {
-            const view = model.getSelectedView();
-            try {
-              model.insertRows(view.sheet, view.range[2] + 1, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_inserting_rows"));
-            }
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
-          onDeleteColumn={(): void => {
-            const view = model.getSelectedView();
-            try {
-              model.deleteColumns(view.sheet, view.column, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_deleting_columns"));
-            }
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
-          onDeleteRow={(): void => {
-            const view = model.getSelectedView();
-            try {
-              model.deleteRows(view.sheet, view.row, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_deleting_rows"));
-            }
-            setCellContextMenuOpen(false);
-            refresh();
-          }}
+          onDeleteNote={() =>
+            cellMenuAction(() => {
+              const { sheet, row, column } = model.getSelectedView();
+              model.deleteCellComment(sheet, row, column);
+            })
+          }
+          onMerge={(operation) =>
+            cellMenuAction(() => props.onMergeCells(operation))
+          }
+          onHideRows={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.setRowsHidden(
+                model.getSelectedSheet(),
+                s.rowStart,
+                s.rowEnd,
+                true,
+              );
+            })
+          }
+          onHideColumns={() =>
+            cellMenuAction(() => {
+              const s = menuSelection;
+              model.setColumnsHidden(
+                model.getSelectedSheet(),
+                s.columnStart,
+                s.columnEnd,
+                true,
+              );
+            })
+          }
+          onResizeRows={() =>
+            cellMenuAction(() => {
+              const sheet = model.getSelectedSheet();
+              const height = model.getRowHeight(sheet, menuSelection.rowStart);
+              setRowHeightDefault(`${height}`);
+              setRowHeightDialogOpen(true);
+            })
+          }
+          onResizeColumns={() =>
+            cellMenuAction(() => {
+              const sheet = model.getSelectedSheet();
+              const width = model.getColumnWidth(
+                sheet,
+                menuSelection.columnStart,
+              );
+              setColumnWidthDefault(`${width}`);
+              setColumnWidthDialogOpen(true);
+            })
+          }
+          onFreezeRows={() =>
+            cellMenuAction(() => {
+              model.setFrozenRowsCount(
+                model.getSelectedSheet(),
+                menuSelection.rowStart,
+              );
+            })
+          }
+          onFreezeColumns={() =>
+            cellMenuAction(() => {
+              model.setFrozenColumnsCount(
+                model.getSelectedSheet(),
+                menuSelection.columnStart,
+              );
+            })
+          }
+          onUnfreeze={() =>
+            cellMenuAction(() => {
+              const sheet = model.getSelectedSheet();
+              model.setFrozenRowsCount(sheet, 0);
+              model.setFrozenColumnsCount(sheet, 0);
+            })
+          }
+          onDefineNamedRange={() => cellMenuAction(props.onOpenNamedRanges)}
+          onConditionalFormatting={() =>
+            cellMenuAction(props.onOpenConditionalFormatting)
+          }
         />
         <ColumnHeaderContextMenu
           open={colHeaderContextMenuOpen}
