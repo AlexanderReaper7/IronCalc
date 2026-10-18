@@ -237,6 +237,73 @@
   background-color: var(--palette-grey-800);
 }
 
+/* The note of a cell, beside the cell (NoteCard.tsx) */
+.ic-worksheet-note-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 160px;
+  max-width: 280px;
+  padding: 8px 10px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--palette-surface-elevated-border);
+  border-left: 3px solid var(--palette-sheet-note-marker-color);
+  background-color: var(--palette-surface-elevated);
+  color: var(--palette-common-black);
+  font-size: var(--typography-font-size);
+  font-family: var(--typography-font-family);
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+}
+
+.ic-worksheet-note-card svg {
+  width: 1em;
+  height: 1em;
+}
+
+.ic-worksheet-note-card-author {
+  color: var(--palette-grey-600);
+  font-weight: 600;
+}
+
+.ic-worksheet-note-card-text {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.ic-worksheet-note-card-text:disabled {
+  cursor: default;
+}
+
+.ic-worksheet-note-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.ic-worksheet-note-card-input {
+  width: 260px;
+  min-height: 6em;
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
 /* Editor wrapper */
 .ic-worksheet-editor-wrapper {
   position: absolute;

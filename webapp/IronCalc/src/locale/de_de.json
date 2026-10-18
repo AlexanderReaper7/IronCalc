@@ -150,11 +150,14 @@
   },
   "context_menu": {
     "cell": {
+      "add_note": "Notiz hinzufügen",
       "copy": "Kopieren",
       "cut": "Ausschneiden",
       "delete": "Löschen...",
       "delete_column": "Spalte '{{column}}'",
+      "delete_note": "Notiz löschen",
       "delete_row": "Zeile '{{row}}'",
+      "edit_note": "Notiz bearbeiten",
       "insert": "Einfügen...",
       "insert_column_left": "Spalte links",
       "insert_column_right": "Spalte rechts",
@@ -313,6 +316,12 @@
   "navigation": {
     "add_sheet": "Tabellenblatt hinzufügen",
     "sheet_list": "Tabellenblattliste"
+  },
+  "note_card": {
+    "delete": "Notiz löschen",
+    "edit": "Notiz bearbeiten",
+    "label": "Notiz",
+    "placeholder": "Notiz schreiben"
   },
   "num_fmt": {
     "cancel": "Abbrechen",

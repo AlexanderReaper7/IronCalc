@@ -58,6 +58,7 @@ const Workbook = (props: {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const worksheetRef = useRef<{
     getCanvas: () => WorksheetCanvas | null;
+    editNote: () => void;
   }>(null);
   const lastClipboardJson = useRef<string | null>(null);
 
@@ -441,6 +442,9 @@ const Workbook = (props: {
         editorHeight,
       });
       setRedrawId((id) => id + 1);
+    },
+    onEditNote: (): void => {
+      worksheetRef.current?.editNote();
     },
     onCellEditStart: (): void => {
       // User presses F2, we start editing at the edn of the text

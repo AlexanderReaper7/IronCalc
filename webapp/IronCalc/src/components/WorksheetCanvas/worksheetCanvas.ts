@@ -4,6 +4,7 @@ import { getColor } from "../Editor/util";
 import type { Cell } from "../types";
 import type { WorkbookState } from "../workbookState";
 import { CellLinks, type LinkHoverCell } from "./cellLinks";
+import { CellNotes, type NoteCell } from "./cellNotes";
 import {
   drawBorder,
   drawBorderLine,
@@ -51,6 +52,8 @@ export interface CanvasSettings {
   // double-click) is rejected
   onAutofillError?: (message: string) => void;
   linkTooltipCell: LinkHoverCell | null;
+  // The pointer is over a cell with a note (or over none when null)
+  onNoteHover?: (cell: NoteCell | null) => void;
   refresh: () => void;
 }
 
@@ -142,6 +145,8 @@ export default class WorksheetCanvas {
 
   private cellLinks: CellLinks;
 
+  private cellNotes: CellNotes;
+
   theme: Theme;
 
   constructor(options: CanvasSettings) {
@@ -192,6 +197,39 @@ export default class WorksheetCanvas {
       onHideTooltip: options.onHideLinkTooltip,
       tooltipCell: options.linkTooltipCell,
     });
+    this.cellNotes = new CellNotes(this, {
+      onNoteHover: options.onNoteHover,
+    });
+  }
+
+  // The cell with a note at (row, column) with its current rectangle, or null
+  // when the cell has no note
+  noteCell(row: number, column: number): NoteCell | null {
+    return this.cellNotes.noteCell(row, column);
+  }
+
+  // The canvas rectangle [x, y, width, height] of a cell, the merged range it
+  // anchors if any. Like getCoordinatesByCell it may lie outside the canvas.
+  getCellRectangle(
+    row: number,
+    column: number,
+  ): [number, number, number, number] {
+    const selectedSheet = this.model.getSelectedSheet();
+    const [x, y] = this.getCoordinatesByCell(row, column);
+    let width = this.getColumnWidth(selectedSheet, column);
+    let height = this.getRowHeight(selectedSheet, row);
+    const merge = this.mergeMap.get(`${row}-${column}`);
+    if (merge && merge.row === row && merge.column === column) {
+      width = 0;
+      for (let c = column; c < column + merge.width; c += 1) {
+        width += this.getColumnWidth(selectedSheet, c);
+      }
+      height = 0;
+      for (let r = row; r < row + merge.height; r += 1) {
+        height += this.getRowHeight(selectedSheet, r);
+      }
+    }
+    return [x, y, width, height];
   }
 
   // Follows a cell link: opens external targets in a new tab, navigates to
@@ -1054,6 +1092,10 @@ export default class WorksheetCanvas {
       );
     }
 
+    if (this.cellNotes.getComment(row, column)) {
+      this.renderNoteMarker(x, y, width);
+    }
+
     // Borders — we only draw left and top; the adjacent cell draws right/bottom.
     // Borders are stored per cell, so the left edge of a
     // merged range is drawn one segment per row and the top edge one segment
@@ -1075,6 +1117,19 @@ export default class WorksheetCanvas {
       this.renderTopBorder(merge.row, c, segmentX, y, columnWidth);
       segmentX += columnWidth;
     }
+  }
+
+  // A small triangle in the top right corner of a cell with a note
+  private renderNoteMarker(x: number, y: number, width: number): void {
+    const size = 7;
+    const context = this.ctx;
+    context.fillStyle = this.theme.noteMarkerColor;
+    context.beginPath();
+    context.moveTo(x + width - size, y + 0.5);
+    context.lineTo(x + width, y + 0.5);
+    context.lineTo(x + width, y + size + 0.5);
+    context.closePath();
+    context.fill();
   }
 
   // The fill color a cell shows on screen: a cell covered by a merged range
@@ -2343,6 +2398,8 @@ export default class WorksheetCanvas {
     this.updateMergedCells();
 
     const { topLeftCell, bottomRightCell } = this.getVisibleCells();
+
+    this.cellNotes.setSheetComments(this.model.getComments(selectedSheet));
 
     // Pass 1
     this.computeCellsText();

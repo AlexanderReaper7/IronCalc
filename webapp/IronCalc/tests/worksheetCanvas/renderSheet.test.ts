@@ -235,3 +235,15 @@ test.each([
     `default-colors-${mode}`,
   );
 });
+
+// A cell with a note gets a marker in its top right corner, an empty cell too
+test("note markers", async () => {
+  const model = await newModel();
+  labelTopLeftCell(model);
+  model.setUserInput(0, 2, 2, "With a note");
+  model.setCellComment(0, 2, 2, "A note", "Ann");
+  model.setCellComment(0, 4, 3, "On an empty cell", "");
+  model.setUserInput(0, 6, 2, "No note");
+
+  await expectScreenshot(await renderToCanvas(model), "note-markers");
+});

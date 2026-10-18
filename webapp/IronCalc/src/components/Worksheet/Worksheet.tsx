@@ -12,6 +12,7 @@ import Editor from "../Editor/Editor";
 import type { Cell } from "../types";
 import { getEditorSize } from "../util";
 import type { LinkHoverCell } from "../WorksheetCanvas/cellLinks";
+import type { NoteCell } from "../WorksheetCanvas/cellNotes";
 import {
   headerColumnWidth,
   headerRowHeight,
@@ -24,6 +25,7 @@ import CellContextMenu from "./ContextMenus/Cell";
 import ColumnHeaderContextMenu from "./ContextMenus/ColumnHeader";
 import RowHeaderContextMenu from "./ContextMenus/RowHeader";
 import LinkTooltip from "./LinkTooltip";
+import NoteCard, { type NoteCardCell } from "./NoteCard";
 import usePointer from "./usePointer";
 import "./worksheet.css";
 import { Alert, Prompt } from "../Modal";
@@ -125,6 +127,33 @@ const Worksheet = forwardRef(
       }, 300);
     };
 
+    // The note card shows the note of the cell being written (editingNote),
+    // else of the cell under the pointer (hoverNote, reported by the canvas
+    // like the link tooltip), else of the selected cell, so that a note also
+    // shows where there is no pointer, as on a phone.
+    const [hoverNote, setHoverNote] = useState<NoteCell | null>(null);
+    const [editingNote, setEditingNote] = useState<{
+      sheet: number;
+      row: number;
+      column: number;
+    } | null>(null);
+    const noteHideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const cancelHideNote = (): void => {
+      if (noteHideTimeout.current !== null) {
+        clearTimeout(noteHideTimeout.current);
+        noteHideTimeout.current = null;
+      }
+    };
+    const scheduleHideNote = (): void => {
+      if (noteHideTimeout.current !== null) {
+        return;
+      }
+      noteHideTimeout.current = setTimeout(() => {
+        noteHideTimeout.current = null;
+        setHoverNote(null);
+      }, 300);
+    };
+
     const { model, workbookState, refresh, canEdit, onCut, onCopy, onPaste } =
       props;
     const { t } = useTranslation();
@@ -132,6 +161,14 @@ const Worksheet = forwardRef(
 
     useImperativeHandle(ref, () => ({
       getCanvas: () => worksheetCanvas.current,
+      // Opens the note of the selected cell for writing (Shift+F2)
+      editNote: () => {
+        if (!canEdit) {
+          return;
+        }
+        const { sheet, row, column } = model.getSelectedView();
+        setEditingNote({ sheet, row, column });
+      },
     }));
 
     useEffect(() => {
@@ -219,6 +256,20 @@ const Worksheet = forwardRef(
           }
         },
         onHideLinkTooltip: hideLinkTooltip,
+        onNoteHover: (cell) => {
+          if (cell) {
+            cancelHideNote();
+            setHoverNote((previous) =>
+              previous &&
+              previous.row === cell.row &&
+              previous.column === cell.column
+                ? previous
+                : cell,
+            );
+          } else if (hoverNote !== null) {
+            scheduleHideNote();
+          }
+        },
         onAutofillError: (message) => {
           // the known rejections get a dialog; anything else stays silent
           if (
@@ -380,6 +431,44 @@ const Worksheet = forwardRef(
         y: model.getScrollY(),
       };
     };
+
+    // The card is placed from the current geometry on every render, so it
+    // follows scrolling and resizing
+    const noteCard = ((): { cell: NoteCardCell; editing: boolean } | null => {
+      const canvas = worksheetCanvas.current;
+      if (!canvas) {
+        return null;
+      }
+      const view = model.getSelectedView();
+      if (editingNote) {
+        if (editingNote.sheet !== view.sheet) {
+          return null;
+        }
+        const { row, column } = editingNote;
+        const [x, y, width, height] = canvas.getCellRectangle(row, column);
+        const comment = model.getCellComment(view.sheet, row, column) ?? null;
+        return {
+          cell: { row, column, x, y, width, height, comment },
+          editing: true,
+        };
+      }
+      if (workbookState.getEditingCell()) {
+        return null;
+      }
+      const cell = hoverNote
+        ? canvas.noteCell(hoverNote.row, hoverNote.column)
+        : canvas.noteCell(view.row, view.column);
+      if (
+        !cell ||
+        cell.x + cell.width <= headerColumnWidth ||
+        cell.y + cell.height <= headerRowHeight ||
+        cell.x >= canvas.width ||
+        cell.y >= canvas.height
+      ) {
+        return null;
+      }
+      return { cell, editing: false };
+    })();
 
     return (
       <div
@@ -591,6 +680,50 @@ const Worksheet = forwardRef(
               onPointerLeave={scheduleHideLinkTooltip}
             />
           ) : null}
+          {noteCard ? (
+            <NoteCard
+              key={`${noteCard.cell.row}-${noteCard.cell.column}-${noteCard.editing}`}
+              cell={noteCard.cell}
+              areaWidth={worksheetCanvas.current?.width ?? 0}
+              editing={noteCard.editing}
+              canEdit={canEdit}
+              onStartEdit={() => {
+                const { sheet } = model.getSelectedView();
+                const { row, column } = noteCard.cell;
+                setEditingNote({ sheet, row, column });
+              }}
+              onSave={(text) => {
+                const { sheet } = model.getSelectedView();
+                const { row, column, comment } = noteCard.cell;
+                if (text) {
+                  model.setCellComment(
+                    sheet,
+                    row,
+                    column,
+                    text,
+                    comment?.author_name ?? "",
+                  );
+                } else {
+                  model.deleteCellComment(sheet, row, column);
+                }
+                setEditingNote(null);
+                refresh();
+              }}
+              onCancel={() => setEditingNote(null)}
+              onDelete={() => {
+                const { sheet } = model.getSelectedView();
+                model.deleteCellComment(
+                  sheet,
+                  noteCard.cell.row,
+                  noteCard.cell.column,
+                );
+                setHoverNote(null);
+                refresh();
+              }}
+              onPointerEnter={cancelHideNote}
+              onPointerLeave={scheduleHideNote}
+            />
+          ) : null}
         </div>
         <CellContextMenu
           open={cellContextMenuOpen}
@@ -605,6 +738,22 @@ const Worksheet = forwardRef(
           onCut={onCut}
           onCopy={onCopy}
           onPaste={onPaste}
+          canEdit={canEdit}
+          hasNote={(() => {
+            const { sheet, row, column } = model.getSelectedView();
+            return !!model.getCellComment(sheet, row, column);
+          })()}
+          onEditNote={(): void => {
+            const { sheet, row, column } = model.getSelectedView();
+            setCellContextMenuOpen(false);
+            setEditingNote({ sheet, row, column });
+          }}
+          onDeleteNote={(): void => {
+            const { sheet, row, column } = model.getSelectedView();
+            model.deleteCellComment(sheet, row, column);
+            setCellContextMenuOpen(false);
+            refresh();
+          }}
           onInsertColumnLeft={(): void => {
             const view = model.getSelectedView();
             try {

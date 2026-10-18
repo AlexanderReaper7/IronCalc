@@ -100,6 +100,7 @@ export function readThemeFromCSS(root: Element): Theme {
       style,
     ),
     defaultTextColor: readCSSVar("--palette-sheet-default-text-color", style),
+    noteMarkerColor: readCSSVar("--palette-sheet-note-marker-color", style),
     headerSelectedColor: readCSSVar(
       "--palette-sheet-header-selected-color",
       style,
@@ -121,6 +122,7 @@ export interface Theme {
   headerFont: string;
   gridSeparatorColor: string;
   defaultTextColor: string;
+  noteMarkerColor: string;
   filledCellTextColor: string;
   commonWhite: string;
   headerSelectedColor: string;
