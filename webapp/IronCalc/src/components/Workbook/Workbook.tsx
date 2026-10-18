@@ -52,6 +52,7 @@ const Workbook = (props: {
   workbookState: WorkbookState;
   /** When false, the toolbar is hidden, the formula bar is read-only and all edits are blocked. */
   canEdit?: boolean;
+  sheetExtent?: "content" | "unbounded";
 }) => {
   const { model, workbookState, canEdit = true } = props;
   const { t } = useTranslation();
@@ -1034,6 +1035,7 @@ const Workbook = (props: {
           }}
           ref={worksheetRef}
           canEdit={canEdit && canEditFormula}
+          sheetExtent={props.sheetExtent ?? "unbounded"}
           onCut={(): void => {
             focusWorkbook();
             document.execCommand("cut");

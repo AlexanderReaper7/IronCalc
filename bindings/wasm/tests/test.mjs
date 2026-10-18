@@ -347,3 +347,11 @@ test('Merge cells variants', () => {
     model.undo();
     assert.deepEqual(model.getMergedCells(0), []);
 });
+
+test('Sheet extent', () => {
+    const model = new Model('Workbook1', 'en', 'UTC', 'en');
+    assert.deepEqual(model.getSheetExtent(0), [0, 0]);
+    model.setUserInput(0, 4, 2, 'a');
+    model.setUserInput(0, 2, 6, '=1+1');
+    assert.deepEqual(model.getSheetExtent(0), [4, 6]);
+});

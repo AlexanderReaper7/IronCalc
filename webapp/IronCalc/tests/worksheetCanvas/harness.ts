@@ -48,6 +48,7 @@ export interface RenderOptions {
   width?: number;
   height?: number;
   themeVars?: Record<string, string>;
+  sheetExtent?: "content" | "unbounded";
 }
 
 // Builds the WorksheetCanvas for `model` and renders one frame. Returns the
@@ -100,6 +101,7 @@ export async function renderWorksheet(
     onColumnWidthChanges: () => {},
     onRowHeightChanges: () => {},
     linkTooltipCell: null,
+    sheetExtent: options.sheetExtent,
     refresh: () => {},
   });
   worksheet.renderSheet();

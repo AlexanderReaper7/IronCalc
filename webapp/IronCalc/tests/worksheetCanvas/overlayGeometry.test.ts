@@ -12,6 +12,8 @@ import { expect, test } from "vitest";
 import {
   headerColumnWidth,
   headerRowHeight,
+  LAST_COLUMN,
+  LAST_ROW,
 } from "../../src/components/WorksheetCanvas/constants";
 import { newModel, renderWorksheet } from "./harness";
 
@@ -185,4 +187,46 @@ test("a selected area across the frozen line: area outline spans only the visibl
     x: x + COLUMN_WIDTH,
     y: y + heightOnScreen,
   });
+});
+
+test("a grid bounded by its content ends past the last value and grows with the selection", async () => {
+  const model = await newModel();
+  model.setUserInput(0, 3, 3, "C3");
+  model.setUserInput(0, 5, 2, "B5");
+  const options = { width: 800, height: 600, sheetExtent: "content" as const };
+  let { worksheet } = await renderWorksheet(model, options);
+  // the last value is in row 5 and column C, plus the margins
+  expect([worksheet.lastRow, worksheet.lastColumn]).toEqual([15, 6]);
+  // the scroll area ends where the grid does
+  const [width, height] = worksheet.getSheetDimensions();
+  expect(height).toBe(headerRowHeight + 15 * ROW_HEIGHT);
+  expect(width).toBe(headerColumnWidth + 6 * COLUMN_WIDTH);
+  // nothing below or to the right of the grid is a cell
+  expect(
+    worksheet.getCellByCoordinates(headerColumnWidth + 50, height + 10),
+  ).toBeNull();
+  expect(
+    worksheet.getCellByCoordinates(width + 10, headerRowHeight + 10),
+  ).toBeNull();
+  expect(
+    worksheet.getCellByCoordinates(
+      headerColumnWidth + 150,
+      headerRowHeight + 30,
+    ),
+  ).toEqual({ row: 2, column: 2 });
+
+  // moving the selection past the end grows the grid
+  model.setSelectedCell(20, 9);
+  ({ worksheet } = await renderWorksheet(model, options));
+  expect([worksheet.lastRow, worksheet.lastColumn]).toEqual([30, 12]);
+});
+
+test("an unbounded grid runs to the last row and column", async () => {
+  const model = await newModel();
+  model.setUserInput(0, 3, 3, "C3");
+  const { worksheet } = await renderWorksheet(model);
+  expect([worksheet.lastRow, worksheet.lastColumn]).toEqual([
+    LAST_ROW,
+    LAST_COLUMN,
+  ]);
 });
