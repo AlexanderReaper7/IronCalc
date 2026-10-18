@@ -64,9 +64,12 @@ export class CellNotes {
     return this.notes.get(`${row}-${column}`) || null;
   }
 
-  // The cell with a note at (row, column) with its current rectangle, or null
+  // The cell with a note at (row, column) with its current rectangle, or null.
+  // Read from the model rather than the map, which is only rebuilt when the
+  // sheet is rendered: the card is placed before that, right after an edit.
   noteCell(row: number, column: number): NoteCell | null {
-    const comment = this.getComment(row, column);
+    const sheet = this.worksheet.model.getSelectedSheet();
+    const comment = this.worksheet.model.getCellComment(sheet, row, column);
     if (!comment) {
       return null;
     }
